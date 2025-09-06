@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no" />
+<title>One-Week Habit & Work Tracker</title>
+<style>
+  :root{
+    --bg:#0f1216; --card:#161b22; --ink:#e6edf3; --muted:#9aa4b2; --accent:#0f8241;
+    --bad:#c0392b; --ok:#e67e22; --good:#2ecc71; --line:#263043;
+  }
+  html,body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial;}
+  .wrap{max-width:820px;margin:0 auto;padding:16px;}
+  h1{font-size:22px;margin:6px 0 10px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin:10px 0;}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  label{font-size:14px;color:var(--muted)}
+  input[type="date"],select,button{background:#0c1118;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:14px}
+  button{cursor:pointer}
+  button.primary{background:var(--accent);border-color:transparent}
+  .grid{display:grid;grid-template-columns:1fr repeat(7, minmax(34px, 1fr));gap:8px;align-items:center}
+  .grid .h{font-weight:600;color:var(--muted);font-size:12px;text-align:center}
+  .grid .label{font-size:14px}
+  .cell{text-align:center}
+  .kpi{display:flex;gap:10px;flex-wrap:wrap}
+  .pill{background:#0c1118;border:1px solid var(--line);border-radius:999px;padding:8px 12px;font-size:13px}
+  progress{width:100%;height:12px;border:0;border-radius:999px;overflow:hidden;background:#0c1118}
+  progress::-webkit-progress-bar{background:#0c1118}
+  progress::-webkit-progress-value{background:var(--accent)}
+  .bar{display:flex;gap:10px;align-items:center}
+  .bar small{color:var(--muted)}
+  .hint{font-size:12px;color:var(--muted)}
+  .hr{height:1px;background:var(--line);margin:10px 0}
+  .reward{font-weight:700}
+  .reward.good{color:var(--good)} .reward.warn{color:var(--ok)} .reward.bad{color:var(--bad)}
+  .tiny{font-size:12px;color:var(--muted)}
+  .list{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+  .mono{font-family:ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;font-size:12px}
+  .foot{display:flex;gap:8px;flex-wrap:wrap;justify-content:space-between;align-items:center}
+  .spacer{flex:1}
+  @media (max-width:520px){ .grid{grid-template-columns:1fr repeat(7, 42px)} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>One-Week Habit & Work Tracker</h1>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="start">Week start</label><br/>
+        <input type="date" id="start"/>
+      </div>
+      <div>
+        <label for="preset">Preset goals</label><br/>
+        <select id="preset">
+          <option value="default">This week's goals</option>
+        </select>
+      </div>
+      <div class="spacer"></div>
+      <div class="row">
+        <button id="copy-summary">Copy summary</button>
+        <button id="download-json">Download data</button>
+        <button id="reset" class="primary">Reset week</button>
+      </div>
+      <div style="width:100%"><small class="hint">
+        Tip - set week start to Sunday or Monday - your call. Data auto-saves on your device.
+      </small></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="kpi">
+      <span class="pill">Daily habits: <b id="habitDone">0</b>/<b id="habitTotal">0</b></span>
+      <span class="pill">Weekly completion: <b id="pct">0%</b></span>
+      <span class="pill">Gym count: <b id="gymCnt">0</b>/4</span>
+      <span class="pill">No junk days: <b id="junkCnt">0</b>/7</span>
+    </div>
+    <div class="bar" style="margin-top:10px">
+      <progress id="progress" value="0" max="100"></progress>
+      <small id="reward" class="reward">Reward status will appear here</small>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="grid" id="table">
+      <!-- header -->
+    </div>
+    <div class="hr"></div>
+    <div class="tiny">
+      Rules - Gym target is 4 sessions in the week - Work is counted only if checked within workday - No junk means no pizza - burgers - rolls - heavy Chinese
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="list">
+      <div><b>One-time tasks this week</b></div><div></div>
+      <div>Empty fridge</div><div><input type="checkbox" data-once="emptyFridge"></div>
+      <div>Blood tests done</div><div><input type="checkbox" data-once="bloods"></div>
+    </div>
+  </div>
+
+  <div class="foot">
+    <div class="tiny">
+      Rewards - 100 percent: one healthy restaurant meal - 75 to 80 percent: spa day - below 75 percent or any junk ordered: no reward plus finish 2 wedding tasks plus 15 minute call with Mom
+    </div>
+  </div>
+
+  <div style="height:16px"></div>
+  <div class="tiny mono" id="debug"></div>
+</div>
+
+<script>
+(function(){
+  const DAYS = 7;
+  const dailyGoals = [
+    { key:"wake", label:"Wake on time" },
+    { key:"gym",  label:"Gym" },
+    { key:"walk", label:"Walk 1 hour" },
+    { key:"utensils", label:"Wash utensils - or confirm didi" },
+    { key:"foodOnTime", label:"Food on time - no delays" },
+    { key:"sleepOnTime", label:"Sleep on time" },
+    { key:"work8h", label:"Work 8h within workday" },
+    { key:"noJunk", label:"No junk ordered" }
+  ];
+  const el = (q)=>document.querySelector(q);
+  const table = el("#table");
+  const startInput = el("#start");
+  const presetSel = el("#preset");
+
+  // Local storage
+  const KEY = "one_week_tracker_v1";
+  let state = load() || bootstrap();
+
+  // Init date default to upcoming Sunday if empty
+  if(!state.start){
+    const d = new Date();
+    const day = d.getDay(); // 0 Sun
+    const sunday = new Date(d);
+    sunday.setDate(d.getDate() - day); // start of this week Sunday
+    state.start = fmtDate(sunday);
+  }
+  startInput.value = state.start;
+
+  // Build header
+  function rebuild(){
+    table.innerHTML = "";
+    // Header row
+    const h0 = document.createElement("div"); h0.className="h"; h0.textContent="Goal";
+    table.appendChild(h0);
+    for(let i=0;i<DAYS;i++){
+      const hd = document.createElement("div"); hd.className="h";
+      const d = dayLabel(i);
+      hd.textContent = d;
+      table.appendChild(hd);
+    }
+    // Rows
+    dailyGoals.forEach(g=>{
+      const lab = document.createElement("div"); lab.className="label"; lab.textContent = g.label;
+      table.appendChild(lab);
+      for(let i=0;i<DAYS;i++){
+        const cell = document.createElement("div"); cell.className="cell";
+        const id = `${g.key}_${i}`;
+        const cb = document.createElement("input");
+        cb.type = "checkbox"; cb.id = id;
+        cb.checked = !!state.daily[id];
+        cb.addEventListener("change", ()=>{ state.daily[id]=cb.checked; save(); refreshKPI(); });
+        cell.appendChild(cb);
+        table.appendChild(cell);
+      }
+    });
+    // One-time binds
+    document.querySelectorAll("[data-once]").forEach(c=>{
+      const k=c.getAttribute("data-once");
+      c.checked = !!state.once[k];
+      c.addEventListener("change", ()=>{ state.once[k]=c.checked; save(); refreshKPI(); });
+    });
+    refreshKPI();
+  }
+
+  function dayLabel(offset){
+    const base = new Date(startInput.value);
+    const d = new Date(base); d.setDate(base.getDate()+offset);
+    const wd = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()];
+    return wd + " " + String(d.getDate()).padStart(2,"0");
+  }
+  function fmtDate(d){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), da=String(d.getDate()).padStart(2,"0");
+    return `${y}-${m}-${da}`;
+  }
+
+  function refreshKPI(){
+    // Totals
+    const totalCells = dailyGoals.length * DAYS;
+    let done=0, gymCnt=0, junkCnt=0;
+    dailyGoals.forEach(g=>{
+      for(let i=0;i<DAYS;i++){
+        const id = `${g.key}_${i}`;
+        if(state.daily[id]) done++;
+        if(g.key==="gym" && state.daily[id]) gymCnt++;
+        if(g.key==="noJunk" && state.daily[id]) junkCnt++;
+      }
+    });
+    // Include one-time tasks as additional cells
+    const onceKeys = Object.keys(state.once);
+    const onceTotal = onceKeys.length;
+    let onceDone = onceKeys.reduce((a,k)=>a + (state.once[k]?1:0), 0);
+
+    const grandTotal = totalCells + onceTotal;
+    const grandDone = done + onceDone;
+
+    // Percent and reward band
+    const pct = Math.round((grandDone / grandTotal) * 100);
+    el("#habitDone").textContent = grandDone;
+    el("#habitTotal").textContent = grandTotal;
+    el("#pct").textContent = pct + "%";
+    el("#gymCnt").textContent = gymCnt;
+    el("#junkCnt").textContent = junkCnt;
+    const prog = el("#progress");
+    prog.value = pct;
+
+    const rw = el("#reward");
+    rw.classList.remove("good","warn","bad");
+    if(pct===100){
+      rw.textContent = "Reward - 100 percent - one healthy restaurant meal";
+      rw.classList.add("good");
+    }else if(pct>=75 && pct<=80){
+      rw.textContent = "Reward - 75 to 80 percent - spa day";
+      rw.classList.add("warn");
+    }else if(pct>80 && pct<100){
+      rw.textContent = "Above 80 percent - your call - choose one small treat";
+      rw.classList.add("warn");
+    }else{
+      rw.textContent = "Below 75 percent - no reward - finish 2 wedding tasks plus 15 minute call with Mom";
+      rw.classList.add("bad");
+    }
+
+    // Debug off by default
+    el("#debug").textContent = "";
+  }
+
+  function bootstrap(){
+    return {
+      start: "",
+      daily: {},  // key: goal_day -> boolean
+      once: { emptyFridge:false, bloods:false },
+      preset: "default"
+    };
+  }
+  function load(){
+    try{
+      const s = localStorage.getItem(KEY);
+      return s? JSON.parse(s) : null;
+    }catch(e){ return null; }
+  }
+  function save(){
+    state.start = startInput.value;
+    state.preset = presetSel.value;
+    localStorage.setItem(KEY, JSON.stringify(state));
+  }
+
+  // Event wires
+  startInput.addEventListener("change", ()=>{ save(); rebuild(); });
+  presetSel.addEventListener("change", ()=>{ save(); rebuild(); });
+
+  el("#reset").addEventListener("click", ()=>{
+    if(!confirm("Reset this week - clears all ticks - keep dates - proceed")) return;
+    const keepStart = state.start, keepPreset = state.preset;
+    state = bootstrap();
+    state.start = keepStart; state.preset = keepPreset;
+    save(); rebuild();
+  });
+
+  el("#download-json").addEventListener("click", ()=>{
+    const blob = new Blob([JSON.stringify(state,null,2)], {type:"application/json"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "one-week-tracker.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  el("#copy-summary").addEventListener("click", ()=>{
+    const lines = [];
+    lines.push(`Week starting ${state.start}`);
+    // Gym and junk
+    let gym=0,junk=0, total=0, done=0;
+    dailyGoals.forEach(g=>{
+      for(let i=0;i<DAYS;i++){
+        const id=`${g.key}_${i}`; const v = !!state.daily[id];
+        if(g.key==="gym" && v) gym++;
+        if(g.key==="noJunk" && v) junk++;
+        total++;
+        if(v) done++;
+      }
+    });
+    const onceKeys = Object.keys(state.once);
+    const onceDone = onceKeys.reduce((a,k)=>a+(state.once[k]?1:0),0);
+    const grandTotal = total + onceKeys.length;
+    const grandDone = done + onceDone;
+    const pct = Math.round(grandDone/grandTotal*100);
+
+    lines.push(`Gym sessions: ${gym}/4`);
+    lines.push(`No junk days: ${junk}/7`);
+    lines.push(`One-time - Empty fridge: ${state.once.emptyFridge? "done":"pending"}, Blood tests: ${state.once.bloods? "done":"pending"}`);
+    lines.push(`Completion: ${pct}%`);
+
+    navigator.clipboard.writeText(lines.join("\n"))
+      .then(()=>alert("Summary copied. Paste in chat or notes."))
+      .catch(()=>alert("Copy failed - your browser blocked clipboard"));
+  });
+
+  rebuild();
+})();
+</script>
+</body>
+</html>
